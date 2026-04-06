@@ -1,0 +1,103 @@
+import { NextRequest } from 'next/server';
+import { PDFParse } from 'pdf-parse';
+import { VoyageAIClient } from 'voyageai';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  getDocs,
+  query,
+  where,
+} from 'firebase/firestore';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
+const voyage = new VoyageAIClient({ apiKey: process.env.VOYAGE_API_KEY! });
+
+// Approx 500-token chunks — ~2000 chars is a safe proxy
+const CHUNK_SIZE = 2000;
+const CHUNK_OVERLAP = 200;
+
+function chunkText(text: string): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    const end = Math.min(start + CHUNK_SIZE, text.length);
+    chunks.push(text.slice(start, end).trim());
+    start += CHUNK_SIZE - CHUNK_OVERLAP;
+  }
+  return chunks.filter((c) => c.length > 20);
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const formData = await req.formData();
+    const file = formData.get('file') as File | null;
+    const userId = formData.get('userId') as string | null;
+
+    if (!file) {
+      return Response.json({ error: 'No file provided' }, { status: 400 });
+    }
+    if (!userId) {
+      return Response.json({ error: 'No userId provided' }, { status: 400 });
+    }
+
+    // 1. Convert File → Buffer → parse PDF using v2 class API
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const parser = new PDFParse({ data: buffer });
+    const textResult = await parser.getText();
+    const rawText = textResult.text;
+
+    if (!rawText || rawText.trim().length < 10) {
+      return Response.json({ error: 'Could not extract text from PDF' }, { status: 422 });
+    }
+
+    // 2. Chunk text
+    const chunks = chunkText(rawText);
+
+    // 3. Embed all chunks via Voyage AI (batches of 128 max)
+    const BATCH_SIZE = 64;
+    const allEmbeddings: number[][] = [];
+
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE);
+      const result = await voyage.embed({
+        input: batch,
+        model: 'voyage-3',
+        inputType: 'document',
+      });
+      const batchEmbeddings = (result.data ?? []).map((d) => d.embedding as number[]);
+      allEmbeddings.push(...batchEmbeddings);
+    }
+
+    // 4. Delete old chunks for this user (replace previous PDF docs)
+    const chunksRef = collection(db, 'chunks');
+    const oldDocsSnap = await getDocs(query(chunksRef, where('userId', '==', userId)));
+    const deletePromises = oldDocsSnap.docs.map((d) => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+
+    // 5. Store new chunks + embeddings
+    const storePromises = chunks.map((chunk, idx) =>
+      addDoc(chunksRef, {
+        userId,
+        text: chunk,
+        embedding: allEmbeddings[idx],
+        chunkIndex: idx,
+        fileName: file.name,
+        createdAt: Date.now(),
+      }),
+    );
+    await Promise.all(storePromises);
+
+    return Response.json({ success: true, chunkCount: chunks.length });
+  } catch (err) {
+    console.error('[upload] error:', err);
+    return Response.json(
+      { error: err instanceof Error ? err.message : 'Internal server error' },
+      { status: 500 },
+    );
+  }
+}
