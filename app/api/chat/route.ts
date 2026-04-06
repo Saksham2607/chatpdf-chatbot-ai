@@ -1,6 +1,7 @@
+export const runtime = "nodejs";
+
 import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { VoyageAIClient } from 'voyageai';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { convertToModelMessages, streamText, UIMessage } from 'ai';
@@ -9,7 +10,22 @@ import { anthropic as anthropicProvider } from '@ai-sdk/anthropic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const voyage = new VoyageAIClient({ apiKey: process.env.VOYAGE_API_KEY! });
+const getEmbedding = async (text: string) => {
+  const response = await fetch("https://api.voyageai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${process.env.VOYAGE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      input: text,
+      model: "voyage-2",
+    }),
+  });
+
+  const data = await response.json();
+  return data.data[0].embedding;
+};
 
 // Cosine similarity between two vectors
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -50,11 +66,21 @@ export async function POST(req: NextRequest) {
       .join(' ');
 
     // 1. Embed the user query
-    const queryEmbedResult = await voyage.embed({
-      input: userText,
-      model: 'voyage-3',
-      inputType: 'query',
-    });
+    const response = await fetch("https://api.voyageai.com/v1/embeddings", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${process.env.VOYAGE_API_KEY}`,
+  },
+  body: JSON.stringify({
+    input: userText,
+    model: "voyage-3",
+    input_type: "query",
+  }),
+});
+
+const data = await response.json();
+const queryEmbedResult = data.data[0].embedding;
     const queryEmbedding = queryEmbedResult.data?.[0]?.embedding as number[];
 
     if (!queryEmbedding) {
