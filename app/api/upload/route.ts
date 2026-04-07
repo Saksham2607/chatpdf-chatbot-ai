@@ -7,7 +7,10 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+const embeddingModel = genAI.getGenerativeModel(
+  { model: 'text-embedding-004' },
+  { apiVersion: 'v1' }
+);
 
 const CHUNK_SIZE = 2000;
 const CHUNK_OVERLAP = 200;
