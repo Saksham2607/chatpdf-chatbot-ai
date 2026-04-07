@@ -10,7 +10,7 @@ export const maxDuration = 60;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const embeddingModel = genAI.getGenerativeModel(
   { model: 'models/text-embedding-004' },
-  { apiVersion: 'v1' }
+  { apiVersion: 'v1beta' }
 );
 
 const CHUNK_SIZE = 2000;

@@ -12,7 +12,7 @@ const anthropic = new Anthropic();
 async function getEmbedding(text: string): Promise<number[]> {
   const model = genAI.getGenerativeModel(
   { model: 'models/text-embedding-004' },
-  { apiVersion: 'v1' }
+  { apiVersion: 'v1beta' }
 );
   const result = await model.embedContent(text);
   return result.embedding.values;
