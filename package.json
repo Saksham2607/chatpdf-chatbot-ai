@@ -12,6 +12,7 @@
     "@ai-sdk/anthropic": "^3.0.66",
     "@ai-sdk/react": "^3.0.148",
     "@anthropic-ai/sdk": "^0.82.0",
+    "@google/generative-ai": "^0.24.1",
     "ai": "^6.0.146",
     "firebase": "^12.11.0",
     "next": "16.2.2",
