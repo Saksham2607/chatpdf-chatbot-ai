@@ -10,7 +10,10 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const anthropic = new Anthropic();
 
 async function getEmbedding(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+  const model = genAI.getGenerativeModel(
+  { model: 'models/text-embedding-004' },
+  { apiVersion: 'v1' }
+);
   const result = await model.embedContent(text);
   return result.embedding.values;
 }
