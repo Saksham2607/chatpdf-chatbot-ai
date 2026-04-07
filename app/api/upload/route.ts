@@ -24,9 +24,9 @@ function chunkText(text: string): string[] {
 }
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const pdfParse = (await import('pdf-parse' as any));
-  const data = await pdfParse(buffer);
-  return data.text;
+  const { extractText } = await import('unpdf');
+  const result = await extractText(new Uint8Array(buffer));
+  return result.text.join(' ');
 }
 
 export async function POST(req: NextRequest) {
