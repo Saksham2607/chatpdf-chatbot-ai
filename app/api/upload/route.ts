@@ -21,6 +21,10 @@ async function getEmbedding(text: string): Promise<number[]> {
     }
   );
   const data = await response.json();
+  console.log('[embedding response]', JSON.stringify(data));
+  if (!data.embedding?.values) {
+    throw new Error(`Embedding failed: ${JSON.stringify(data)}`);
+  }
   return data.embedding.values;
 }
 
