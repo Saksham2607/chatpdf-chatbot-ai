@@ -1,20 +1,28 @@
-
 import { NextRequest } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const embeddingModel = genAI.getGenerativeModel(
-  { model: 'models/text-embedding-004' },
-  { apiVersion: 'v1beta' }
-);
-
 const CHUNK_SIZE = 2000;
 const CHUNK_OVERLAP = 200;
+
+async function getEmbedding(text: string): Promise<number[]> {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'models/text-embedding-004',
+        content: { parts: [{ text }] },
+      }),
+    }
+  );
+  const data = await response.json();
+  return data.embedding.values;
+}
 
 function chunkText(text: string): string[] {
   const chunks: string[] = [];
@@ -55,8 +63,8 @@ export async function POST(req: NextRequest) {
 
     const allEmbeddings: number[][] = [];
     for (const chunk of chunks) {
-      const result = await embeddingModel.embedContent(chunk);
-      allEmbeddings.push(result.embedding.values);
+      const embedding = await getEmbedding(chunk);
+      allEmbeddings.push(embedding);
     }
 
     const chunksRef = collection(db, 'chunks');
