@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { PDFParse } from 'pdf-parse';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
@@ -24,6 +23,12 @@ function chunkText(text: string): string[] {
   return chunks.filter((c) => c.length > 20);
 }
 
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  const pdfParse = (await import('pdf-parse' as any));
+  const data = await pdfParse(buffer);
+  return data.text;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -35,9 +40,8 @@ export async function POST(req: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const parser = new PDFParse({ data: buffer });
-    const textResult = await parser.getText();
-    const rawText = textResult.text;
+
+    const rawText = await extractTextFromPDF(buffer);
 
     if (!rawText || rawText.trim().length < 10) {
       return Response.json({ error: 'Could not extract text from PDF' }, { status: 422 });
